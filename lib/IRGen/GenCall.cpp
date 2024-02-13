@@ -1454,17 +1454,6 @@ void SignatureExpansion::expandExternalSignatureTypes() {
         clang::CodeGen::RequiredArgs::All);
   auto &FI = *ForeignInfo.ClangInfo;
 
-  if (FI.arg_size() != paramTys.size()) {
-    if (cxxCtorDecl)
-      cxxCrorDecl->dump();
-    llvm::errs() << "FI:" << FI.arg_size() << " Params:" << paramTys.size() << "\n";
-
-    llvm::errs() << "arg kind: \n";
-    for (auto &A : FI.arguments()) {
-      llvm::err() << A.info.getKind() << "\n";
-    }
-  }
-
   assert(FI.arg_size() == paramTys.size() &&
          "Expected one ArgInfo for each parameter type!");
 
