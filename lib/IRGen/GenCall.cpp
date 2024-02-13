@@ -1456,12 +1456,12 @@ void SignatureExpansion::expandExternalSignatureTypes() {
 
   if (FI.arg_size() != paramTys.size()) {
     if (cxxCtorDecl)
-      cxxCrorDecl->dump();
+      cxxCtorDecl->dump();
     llvm::errs() << "FI:" << FI.arg_size() << " Params:" << paramTys.size() << "\n";
 
     llvm::errs() << "arg kind: \n";
     for (auto &A : FI.arguments()) {
-      llvm::err() << A.info.getKind() << "\n";
+      llvm::errs() << A.info.getKind() << "\n";
     }
   }
 
