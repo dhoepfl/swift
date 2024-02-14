@@ -31,7 +31,6 @@ namespace llvm {
 }
 
 namespace clang {
-  class CXXConstructorDecl;
   namespace CodeGen {
     class CGFunctionInfo;    
   }
@@ -203,10 +202,10 @@ public:
   /// This is a private detail of the implementation of
   /// IRGenModule::getSignature(CanSILFunctionType), which is what
   /// clients should generally be using.
-  static Signature
-  getUncached(IRGenModule &IGM, CanSILFunctionType formalType,
-              FunctionPointerKind kind, bool forStaticCall = false,
-              const clang::CXXConstructorDecl *cxxCtorDecl = nullptr);
+  static Signature getUncached(IRGenModule &IGM, CanSILFunctionType formalType,
+                               FunctionPointerKind kind,
+                               bool forStaticCall = false,
+                               bool forCXXConstructorCall = false);
 
   static SignatureExpansionABIDetails
   getUncachedABIDetails(IRGenModule &IGM, CanSILFunctionType formalType,

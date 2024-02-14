@@ -25,7 +25,6 @@
 #include "swift/SIL/SILModule.h"
 #include "swift/SIL/SILType.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/AST/GlobalDecl.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/CodeGenABITypes.h"
@@ -431,7 +430,7 @@ namespace {
     bool forStaticCall = false; // Used for objc_method (direct call or not).
 
     // Indicates this is a c++ constructor call.
-    const clang::CXXConstructorDecl *cxxCtorDecl = nullptr;
+    bool forCXXConstructorCall = false;
 
   public:
     SmallVector<llvm::Type*, 8> ParamIRTypes;
@@ -448,9 +447,9 @@ namespace {
 
     SignatureExpansion(IRGenModule &IGM, CanSILFunctionType fnType,
                        FunctionPointerKind fnKind, bool forStaticCall = false,
-                       const clang::CXXConstructorDecl *cxxCtorDecl = nullptr)
+                       bool forCXXConstructorCall = false)
         : IGM(IGM), FnType(fnType), forStaticCall(forStaticCall),
-          cxxCtorDecl(cxxCtorDecl), FnKind(fnKind) {}
+          forCXXConstructorCall(forCXXConstructorCall), FnKind(fnKind) {}
 
     /// Expand the components of the primary entrypoint of the function type.
     void expandFunctionType(
@@ -1375,8 +1374,12 @@ void SignatureExpansion::expandExternalSignatureTypes() {
             IGM.getSILModule(), FnType, TypeExpansionContext::minimal()));
   }();
 
-  // Convert the SIL result type to a Clang type.
-  auto clangResultTy = IGM.getClangType(SILResultTy);
+  // Convert the SIL result type to a Clang type. If this is for a c++
+  // constructor, use 'void' as the return type.
+  auto clangResultTy = IGM.getClangType(
+      forCXXConstructorCall
+          ? SILType::getPrimitiveObjectType(IGM.Context.TheEmptyTupleType)
+          : SILResultTy);
 
   // Now convert the parameters to Clang types.
   auto params = FnType->getParameters();
@@ -1412,7 +1415,7 @@ void SignatureExpansion::expandExternalSignatureTypes() {
   }
 
   case SILFunctionTypeRepresentation::CFunctionPointer:
-    if (cxxCtorDecl) {
+    if (forCXXConstructorCall) {
       auto clangTy = IGM.getClangASTContext().getPointerType(
           IGM.getClangType(SILResultTy));
       paramTys.push_back(clangTy);
@@ -1444,15 +1447,10 @@ void SignatureExpansion::expandExternalSignatureTypes() {
 
   // Generate function info for this signature.
   auto extInfo = clang::FunctionType::ExtInfo();
-
-  if (cxxCtorDecl)
-    ForeignInfo.ClangInfo = &clang::CodeGen::arrangeCXXStructorDeclaration(
-        IGM.ClangCodeGen->CGM(), {cxxCtorDecl, clang::Ctor_Complete});
-  else
-    ForeignInfo.ClangInfo = &clang::CodeGen::arrangeFreeFunctionCall(
-        IGM.ClangCodeGen->CGM(), clangResultTy, paramTys, extInfo,
-        clang::CodeGen::RequiredArgs::All);
-  auto &FI = *ForeignInfo.ClangInfo;
+  auto &FI = clang::CodeGen::arrangeFreeFunctionCall(IGM.ClangCodeGen->CGM(),
+                                             clangResultTy, paramTys, extInfo,
+                                             clang::CodeGen::RequiredArgs::All);
+  ForeignInfo.ClangInfo = &FI;
 
   assert(FI.arg_size() == paramTys.size() &&
          "Expected one ArgInfo for each parameter type!");
@@ -1463,7 +1461,8 @@ void SignatureExpansion::expandExternalSignatureTypes() {
   bool formalIndirectResult = FnType->getNumResults() > 0 &&
                               FnType->getSingleResult().isFormalIndirect();
   assert(
-      (cxxCtorDecl || !formalIndirectResult || returnInfo.isIndirect()) &&
+      (forCXXConstructorCall || !formalIndirectResult ||
+       returnInfo.isIndirect()) &&
       "swift and clang disagree on whether the result is returned indirectly");
 #endif
 
@@ -2176,10 +2175,10 @@ Signature SignatureExpansion::getSignature() {
 Signature Signature::getUncached(IRGenModule &IGM,
                                  CanSILFunctionType formalType,
                                  FunctionPointerKind fpKind, bool forStaticCall,
-                                 const clang::CXXConstructorDecl *cxxCtorDecl) {
+                                 bool forCXXConstructorCall) {
   GenericContextScope scope(IGM, formalType->getInvocationGenericSignature());
   SignatureExpansion expansion(IGM, formalType, fpKind, forStaticCall,
-                               cxxCtorDecl);
+                               forCXXConstructorCall);
   expansion.expandFunctionType();
   return expansion.getSignature();
 }
@@ -3996,12 +3995,6 @@ static void externalizeArguments(IRGenFunction &IGF, const Callee &callee,
     // swiftcall function pointers through SIL as C functions anyway.
     assert(FI.getExtParameterInfo(i).getABI() == clang::ParameterABI::Ordinary);
 
-    assert((!silConv.isSILIndirect(params[i - firstParam]) ||
-            AI.getKind() == clang::CodeGen::ABIArgInfo::Direct ||
-            AI.getKind() == clang::CodeGen::ABIArgInfo::Indirect) &&
-           "indirect SIL types passed indirectly should be classified as "
-           "either Direct or Indirect");
-
     // Add a padding argument if required.
     if (auto *padType = AI.getPaddingType())
       out.add(llvm::UndefValue::get(padType));
@@ -4053,15 +4046,6 @@ static void externalizeArguments(IRGenFunction &IGF, const Callee &callee,
     case clang::CodeGen::ABIArgInfo::IndirectAliased:
       llvm_unreachable("not implemented");
     case clang::CodeGen::ABIArgInfo::Indirect: {
-      // If this is a SIL type passed indirectly, avoid emitting a redundant
-      // initializing copy.
-      if (silConv.isSILIndirect(params[i - firstParam])) {
-        assert(paramType.isAddress() && "SIL type is not an address?");
-        auto addr = in.claimNext();
-        out.add(addr);
-        break;
-      }
-
       auto &ti = cast<LoadableTypeInfo>(IGF.getTypeInfo(paramType));
 
       auto temp = ti.allocateStack(IGF, paramType, "indirect-temporary");
