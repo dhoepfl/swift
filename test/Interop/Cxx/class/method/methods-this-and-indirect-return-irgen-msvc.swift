@@ -14,5 +14,5 @@ public func use() -> CInt {
 // CHECK: %[[result:.*]] = alloca %TSo19NonTrivialInWrapperV
 // CHECK: call void @"?nonConstPassThroughAsWrapper@HasMethods@@QEAA?AUNonTrivialInWrapper@@H@Z"(ptr %[[instance]], ptr noalias sret(%TSo19NonTrivialInWrapperV) %[[result]], i32 42)
 
-// CHECK-x86_64: define {{.*}} void @"?nonConstPassThroughAsWrapper@HasMethods@@QEAA?AUNonTrivialInWrapper@@H@Z"(ptr {{.*}} %{{.*}}, ptr noalias sret(%TSo19NonTrivialInWrapperV) {{.*}} %{{.*}}, i32 noundef %{{.*}})
-// CHECK-aarch64: define {{.*}} void @"?nonConstPassThroughAsWrapper@HasMethods@@QEAA?AUNonTrivialInWrapper@@H@Z"(ptr {{.*}} %{{.*}}, ptr inreg noalias sret(%TSo19NonTrivialInWrapperV) {{.*}} %{{.*}}, i32 noundef %{{.*}})
+// CHECK-x86_64: define {{.*}} void @"?nonConstPassThroughAsWrapper@HasMethods@@QEAA?AUNonTrivialInWrapper@@H@Z"(ptr {{.*}} %{{.*}}, ptr noalias sret(%struct.NonTrivialInWrapper) {{.*}} %{{.*}}, i32 noundef %{{.*}})
+// CHECK-aarch64: define {{.*}} void @"?nonConstPassThroughAsWrapper@HasMethods@@QEAA?AUNonTrivialInWrapper@@H@Z"(ptr {{.*}} %{{.*}}, ptr inreg noalias sret(%struct.NonTrivialInWrapper) {{.*}} %{{.*}}, i32 noundef %{{.*}})
