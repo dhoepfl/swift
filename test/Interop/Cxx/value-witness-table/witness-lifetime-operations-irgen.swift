@@ -1,4 +1,5 @@
-// RUN: %target-swift-frontend -enable-experimental-cxx-interop -I %S/Inputs %s -emit-ir -Xcc -fignore-exceptions | %FileCheck %s
+// RUN: %target-swift-frontend -enable-experimental-cxx-interop -I %S/Inputs %s -emit-ir -Xcc -fignore-exceptions | %FileCheck %s --dump-input=always
+// RUN: %target-swift-frontend -enable-experimental-cxx-interop -I %S/Inputs %s -emit-irgen -disable-llvm-optzns -disable-swift-specific-llvm-optzns -Xcc -fignore-exceptions | %FileCheck %s --dump-input=always
 
 // Temporarily restrict to x86 (rdar://89908618)
 // REQUIRES: CPU=x86_64

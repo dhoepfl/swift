@@ -1,6 +1,7 @@
 // Target-specific tests for C++ constructor call code generation.
 
-// RUN: %swift -module-name MySwift -target x86_64-unknown-windows-msvc %target-swift-flags -dump-clang-diagnostics -I %S/Inputs -enable-experimental-cxx-interop -emit-ir %s -parse-stdlib -parse-as-library -disable-legacy-type-info | %FileCheck %s -check-prefix=MICROSOFT_X64
+// RUN: %swift -module-name MySwift -target x86_64-unknown-windows-msvc %target-swift-flags -dump-clang-diagnostics -I %S/Inputs -enable-experimental-cxx-interop -emit-ir %s -parse-stdlib -parse-as-library -disable-legacy-type-info | %FileCheck %s -check-prefix=MICROSOFT_X64 --dump-input=always
+// RUN: %swift -module-name MySwift -target x86_64-unknown-windows-msvc %target-swift-flags -dump-clang-diagnostics -I %S/Inputs -enable-experimental-cxx-interop %s -parse-stdlib -parse-as-library -disable-legacy-type-info -emit-irgen -disable-llvm-optzns -disable-swift-specific-llvm-optzns | %FileCheck %s -check-prefix=MICROSOFT_X64 --dump-input=always
 
 // REQUIRES: OS=windows-msvc
 // REQUIRES: CPU=x86_64
