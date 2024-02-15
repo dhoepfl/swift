@@ -3466,6 +3466,9 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
     return ctorAddress;
   }
 
+  llvm::errs() << "ctor fn type:";
+  ctorFnType->dump();
+
   llvm::Function *thunk = llvm::Function::Create(
       assumedFnType, llvm::Function::PrivateLinkage, name, &IGM.Module);
 
@@ -3510,6 +3513,9 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
     subIGF.Builder.CreateRetVoid();
   else
     subIGF.Builder.CreateRet(call);
+
+  llvm::errs() << "ctor thunk:";
+  thunk->dump();
 
   return thunk;
 }
