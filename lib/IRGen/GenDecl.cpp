@@ -3476,7 +3476,7 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
 
   llvm::AttrBuilder attrBuilder(IGM.getLLVMContext());
   IGM.constructInitialFnAttributes(attrBuilder);
-  attrBuilder.addAttribute(llvm::Attribute::AlwaysInline);
+  attrBuilder.addAttribute(llvm::Attribute::NoInline);
   llvm::AttributeList attr = signature.getAttributes().addFnAttributes(
       IGM.getLLVMContext(), attrBuilder);
   thunk->setAttributes(attr);
