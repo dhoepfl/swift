@@ -4095,6 +4095,16 @@ static void externalizeArguments(IRGenFunction &IGF, const Callee &callee,
       break;
     }
   }
+
+  if (!FI.getReturnInfo().isIndirect() && formalIndirectResult) {
+    llvm::errs() << "### args:\n";
+    for (auto arg : out.getAll())
+      arg->dump();
+
+    llvm::errs() << "### function begin:\n";
+    IGF.CurFn->dump();
+    llvm::errs() << "### function end\n";
+  }
 }
 
 void CallEmission::setKeyPathAccessorArguments(Explosion &in, bool isOutlined,
