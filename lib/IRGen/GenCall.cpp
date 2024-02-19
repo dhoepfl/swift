@@ -1606,6 +1606,16 @@ void SignatureExpansion::expandExternalSignatureTypes() {
   } else {
     ResultIRType = returnInfo.getCoerceToType();
   }
+
+  if (cxxCtorDecl) {
+    llvm::errs() << "### ctor signature:\n";
+    llvm::errs() << "return IR type: ";
+    ResultIRType->dump();
+    llvm::errs() << "param IR type:\n";
+    for (auto t : ParamIRTypes)
+      t->dump();
+    llvm::errs() << "### ctor signature end\n";
+  }
 }
 
 static ArrayRef<llvm::Type *> expandScalarOrStructTypeToArray(llvm::Type *&ty) {

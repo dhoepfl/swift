@@ -3462,12 +3462,17 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
   llvm::FunctionType *ctorFnType =
       cast<llvm::FunctionType>(clangFunc->getValueType());
 
+  llvm::errs() << "### ctor func: " << clangFunc->getName() << "\n";
+  llvm::errs() << "ctor fn type:";
+  ctorFnType->dump();
+
+  llvm::errs() << "assumed type:";
+  assumedFnType->dump();
+  llvm::errs() << "### ctor func end\n";
+
   if (assumedFnType == ctorFnType) {
     return ctorAddress;
   }
-
-  llvm::errs() << "ctor fn type:";
-  ctorFnType->dump();
 
   llvm::Function *thunk = llvm::Function::Create(
       assumedFnType, llvm::Function::PrivateLinkage, name, &IGM.Module);
