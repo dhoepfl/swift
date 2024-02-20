@@ -2998,13 +2998,8 @@ void IRGenSILFunction::visitFunctionRefBaseInst(FunctionRefBaseInst *i) {
   auto fnType = fn->getLoweredFunctionType();
 
   auto fpKind = irgen::classifyFunctionPointerKind(fn);
-  const clang::CXXConstructorDecl *cxxCtorDecl = nullptr;
 
-  if (auto *clangFnDecl = fn->getClangDecl())
-    cxxCtorDecl = dyn_cast<clang::CXXConstructorDecl>(clangFnDecl);
-
-  auto sig =
-      IGM.getSignature(fnType, fpKind, true /*forStaticCall*/, cxxCtorDecl);
+  auto sig = IGM.getSignature(fnType, fpKind, true /*forStaticCall*/);
 
   // Note that the pointer value returned by getAddrOfSILFunction doesn't
   // necessarily have element type sig.getType(), e.g. if it's imported.

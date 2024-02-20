@@ -1,5 +1,4 @@
-// RUN: %target-swift-frontend -enable-experimental-cxx-interop -I %S/Inputs %s -emit-ir -Xcc -fignore-exceptions | %FileCheck %s --dump-input=always
-// RUN: %target-swift-frontend -enable-experimental-cxx-interop -I %S/Inputs %s -emit-irgen -disable-llvm-optzns -disable-swift-specific-llvm-optzns -Xcc -fignore-exceptions | %FileCheck %s --dump-input=always
+// RUN: %target-swift-frontend -enable-experimental-cxx-interop -I %S/Inputs %s -emit-ir -Xcc -fignore-exceptions | %FileCheck %s
 
 // Temporarily restrict to x86 (rdar://89908618)
 // REQUIRES: CPU=x86_64
@@ -22,10 +21,6 @@ let h = Holder(holding: NonTrivial())
 // $sSo10NonTrivialVwcp ---> initializeWithCopy value witness for __C.NonTrivial
 // CHECK-LABEL: define linkonce_odr hidden ptr @"$sSo10NonTrivialVwcp"
 // CHECK-NOT: call
-#if os(Windows)
-// CHECK: call void @llvm.experimental.noalias.scope.decl
-// CHECK-NOT: call
-#endif
 // CHECK: call {{void|ptr}} @{{_ZN10NonTrivialC(1|2)ERKS_|"\?\?0NonTrivial@@QEAA@AEBU0@@Z"}}(ptr %{{.*}}, ptr %{{.*}})
 // CHECK-NOT: call
 // CHECK: ret ptr
@@ -41,10 +36,6 @@ let h = Holder(holding: NonTrivial())
 // $sSo10NonTrivialVwtk ---> initializeWithTake value witness for __C.NonTrivial
 // CHECK-LABEL: define linkonce_odr hidden ptr @"$sSo10NonTrivialVwtk"
 // CHECK-NOT: call
-#if os(Windows)
-// CHECK: call void @llvm.experimental.noalias.scope.decl
-// CHECK-NOT: call
-#endif
 // CHECK: call {{void|ptr}} @{{_ZN10NonTrivialC(1|2)ERKS_|"\?\?0NonTrivial@@QEAA@AEBU0@@Z"}}(ptr %{{.*}}, ptr %{{.*}})
 // CHECK-NOT: call
 // CHECK: call void @{{_ZN10NonTrivialD(1|2)Ev|"\?\?1NonTrivial@@QEAA@XZ"}}(ptr %{{.*}})

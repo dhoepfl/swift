@@ -1595,13 +1595,10 @@ public:
   void finalizeClangCodeGen();
   void finishEmitAfterTopLevel();
 
-  Signature
-  getSignature(CanSILFunctionType fnType,
-               const clang::CXXConstructorDecl *cxxCtorDecl = nullptr);
-  Signature
-  getSignature(CanSILFunctionType fnType, FunctionPointerKind kind,
-               bool forStaticCall = false,
-               const clang::CXXConstructorDecl *cxxCtorDecl = nullptr);
+  Signature getSignature(CanSILFunctionType fnType);
+  Signature getSignature(CanSILFunctionType fnType,
+                         FunctionPointerKind kind,
+                         bool forStaticCall = false);
   llvm::FunctionType *getFunctionType(CanSILFunctionType type,
                                       llvm::AttributeList &attrs,
                                       ForeignFunctionInfo *foreignInfo=nullptr);

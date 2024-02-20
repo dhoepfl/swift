@@ -3462,14 +3462,6 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
   llvm::FunctionType *ctorFnType =
       cast<llvm::FunctionType>(clangFunc->getValueType());
 
-  llvm::errs() << "### ctor func: " << clangFunc->getName() << "\n";
-  llvm::errs() << "ctor fn type:";
-  ctorFnType->dump();
-
-  llvm::errs() << "assumed type:";
-  assumedFnType->dump();
-  llvm::errs() << "### ctor func end\n";
-
   if (assumedFnType == ctorFnType) {
     return ctorAddress;
   }
@@ -3481,8 +3473,7 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
 
   llvm::AttrBuilder attrBuilder(IGM.getLLVMContext());
   IGM.constructInitialFnAttributes(attrBuilder);
-  attrBuilder.addAttribute(llvm::Attribute::NoInline);
-  attrBuilder.addAttribute(llvm::Attribute::OptimizeNone);
+  attrBuilder.addAttribute(llvm::Attribute::AlwaysInline);
   llvm::AttributeList attr = signature.getAttributes().addFnAttributes(
       IGM.getLLVMContext(), attrBuilder);
   thunk->setAttributes(attr);
@@ -3515,13 +3506,7 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
       emitCXXConstructorCall(subIGF, ctor, ctorFnType, ctorAddress, Args);
   if (isa<llvm::InvokeInst>(call))
     IGM.emittedForeignFunctionThunksWithExceptionTraps.insert(thunk);
-  if (ctorFnType->getReturnType()->isVoidTy())
-    subIGF.Builder.CreateRetVoid();
-  else
-    subIGF.Builder.CreateRet(call);
-
-  llvm::errs() << "ctor thunk:";
-  thunk->dump();
+  subIGF.Builder.CreateRetVoid();
 
   return thunk;
 }
@@ -3588,7 +3573,7 @@ llvm::Function *IRGenModule::getAddrOfSILFunction(
     }
 
     if (auto ctor = dyn_cast<clang::CXXConstructorDecl>(clangDecl)) {
-      Signature signature = getSignature(f->getLoweredFunctionType(), ctor);
+      Signature signature = getSignature(f->getLoweredFunctionType());
 
       // The thunk has private linkage, so it doesn't need to have a predictable
       // mangled name -- we just need to make sure the name is unique.

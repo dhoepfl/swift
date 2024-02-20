@@ -125,15 +125,11 @@ namespace {
     const CanSILFunctionType FormalType;
 
     mutable Signature TheSignature;
-    mutable Signature TheCXXConstructorSignature;
 
   public:
     FuncSignatureInfo(CanSILFunctionType formalType)
       : FormalType(formalType) {}
 
-    Signature
-    getCXXConstructorSignature(const clang::CXXConstructorDecl *cxxCtorDecl,
-                               IRGenModule &IGM) const;
     Signature getSignature(IRGenModule &IGM) const;
   };
 
@@ -678,20 +674,6 @@ Signature FuncSignatureInfo::getSignature(IRGenModule &IGM) const {
   return TheSignature;
 }
 
-Signature FuncSignatureInfo::getCXXConstructorSignature(
-    const clang::CXXConstructorDecl *cxxCtorDecl, IRGenModule &IGM) const {
-  // If it's already been filled in, we're done.
-  if (TheCXXConstructorSignature.isValid())
-    return TheCXXConstructorSignature;
-
-  // Update the cache and return.
-  TheCXXConstructorSignature =
-      Signature::getUncached(IGM, FormalType, FunctionPointerKind(FormalType),
-                             /*forStaticCall*/ false, cxxCtorDecl);
-  assert(TheCXXConstructorSignature.isValid());
-  return TheCXXConstructorSignature;
-}
-
 Signature ObjCFuncSignatureInfo::getDirectSignature(IRGenModule &IGM) const {
   // If it's already been filled in, we're done.
   if (TheDirectSignature.isValid())
@@ -730,17 +712,13 @@ getFuncSignatureInfoForLowered(IRGenModule &IGM, CanSILFunctionType type) {
   llvm_unreachable("bad function type representation");
 }
 
-Signature
-IRGenModule::getSignature(CanSILFunctionType type,
-                          const clang::CXXConstructorDecl *cxxCtorDecl) {
-  return getSignature(type, FunctionPointerKind(type), /*forStaticCall*/ false,
-                      cxxCtorDecl);
+Signature IRGenModule::getSignature(CanSILFunctionType type) {
+  return getSignature(type, FunctionPointerKind(type));
 }
 
-Signature
-IRGenModule::getSignature(CanSILFunctionType type, FunctionPointerKind kind,
-                          bool forStaticCall,
-                          const clang::CXXConstructorDecl *cxxCtorDecl) {
+Signature IRGenModule::getSignature(CanSILFunctionType type,
+                                    FunctionPointerKind kind,
+                                    bool forStaticCall) {
   // Don't bother caching if we're working with a special kind.
   if (kind.isSpecial())
     return Signature::getUncached(*this, type, kind);
@@ -752,10 +730,6 @@ IRGenModule::getSignature(CanSILFunctionType type, FunctionPointerKind kind,
     auto &objcSigInfo = static_cast<const ObjCFuncSignatureInfo &>(sigInfo);
     return objcSigInfo.getDirectSignature(*this);
   }
-
-  if (cxxCtorDecl)
-    return sigInfo.getCXXConstructorSignature(cxxCtorDecl, *this);
-
   return sigInfo.getSignature(*this);
 }
 

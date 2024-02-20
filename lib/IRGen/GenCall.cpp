@@ -25,7 +25,6 @@
 #include "swift/SIL/SILModule.h"
 #include "swift/SIL/SILType.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/AST/GlobalDecl.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/CodeGenABITypes.h"
@@ -429,10 +428,6 @@ namespace {
     IRGenModule &IGM;
     CanSILFunctionType FnType;
     bool forStaticCall = false; // Used for objc_method (direct call or not).
-
-    // Indicates this is a c++ constructor call.
-    const clang::CXXConstructorDecl *cxxCtorDecl = nullptr;
-
   public:
     SmallVector<llvm::Type*, 8> ParamIRTypes;
     llvm::Type *ResultIRType = nullptr;
@@ -447,10 +442,8 @@ namespace {
     FunctionPointerKind FnKind;
 
     SignatureExpansion(IRGenModule &IGM, CanSILFunctionType fnType,
-                       FunctionPointerKind fnKind, bool forStaticCall = false,
-                       const clang::CXXConstructorDecl *cxxCtorDecl = nullptr)
-        : IGM(IGM), FnType(fnType), forStaticCall(forStaticCall),
-          cxxCtorDecl(cxxCtorDecl), FnKind(fnKind) {}
+                       FunctionPointerKind fnKind, bool forStaticCall = false)
+        : IGM(IGM), FnType(fnType), forStaticCall(forStaticCall), FnKind(fnKind) {}
 
     /// Expand the components of the primary entrypoint of the function type.
     void expandFunctionType(
@@ -475,7 +468,7 @@ namespace {
 
   private:
     const TypeInfo &expand(SILParameterInfo param);
-    llvm::Type *addIndirectResult(SILType resultType);
+    llvm::Type *addIndirectResult();
 
     SILFunctionConventions getSILFuncConventions() const {
       return SILFunctionConventions(FnType, IGM.getSILModule());
@@ -533,7 +526,9 @@ namespace {
 } // end namespace irgen
 } // end namespace swift
 
-llvm::Type *SignatureExpansion::addIndirectResult(SILType resultType) {
+llvm::Type *SignatureExpansion::addIndirectResult() {
+  auto resultType = getSILFuncConventions().getSILResultType(
+      IGM.getMaximalTypeExpansionContext());
   const TypeInfo &resultTI = IGM.getTypeInfo(resultType);
   auto storageTy = resultTI.getStorageType();
   addIndirectResultAttributes(IGM, Attrs, ParamIRTypes.size(), claimSRet(),
@@ -930,7 +925,7 @@ SignatureExpansion::expandDirectResult() {
     auto &ti = IGM.getTypeInfo(resultType);
     auto &native = ti.nativeReturnValueSchema(IGM);
     if (native.requiresIndirect())
-      return std::make_pair(addIndirectResult(resultType), nullptr);
+      return std::make_pair(addIndirectResult(), nullptr);
 
     // Disable the use of sret if we have a non-trivial direct result.
     if (!native.empty()) CanUseSRet = false;
@@ -1366,27 +1361,25 @@ static bool doesClangExpansionMatchSchema(IRGenModule &IGM,
 void SignatureExpansion::expandExternalSignatureTypes() {
   assert(FnType->getLanguage() == SILFunctionLanguage::C);
 
-  auto SILResultTy = [&]() {
-    if (FnType->getNumResults() == 0)
-      return SILType::getPrimitiveObjectType(IGM.Context.TheEmptyTupleType);
-
-    return SILType::getPrimitiveObjectType(
-        FnType->getSingleResult().getReturnValueType(
-            IGM.getSILModule(), FnType, TypeExpansionContext::minimal()));
-  }();
-
-  // Convert the SIL result type to a Clang type. If this is for a c++
-  // constructor, use 'void' as the return type to arrange the function type.
-  auto clangResultTy = IGM.getClangType(
-      cxxCtorDecl
-          ? SILType::getPrimitiveObjectType(IGM.Context.TheEmptyTupleType)
-          : SILResultTy);
+  // Convert the SIL result type to a Clang type.
+  auto clangResultTy =
+    IGM.getClangType(FnType->getFormalCSemanticResult(IGM.getSILModule()));
 
   // Now convert the parameters to Clang types.
   auto params = FnType->getParameters();
 
   SmallVector<clang::CanQualType,4> paramTys;
   auto const &clangCtx = IGM.getClangASTContext();
+
+  bool formalIndirectResult = FnType->getNumResults() > 0 &&
+                              FnType->getSingleResult().isFormalIndirect();
+  if (formalIndirectResult) {
+    auto resultType = getSILFuncConventions().getSingleSILResultType(
+        IGM.getMaximalTypeExpansionContext());
+    auto clangTy =
+        IGM.getClangASTContext().getPointerType(IGM.getClangType(resultType));
+    paramTys.push_back(clangTy);
+  }
 
   switch (FnType->getRepresentation()) {
   case SILFunctionTypeRepresentation::ObjCMethod: {
@@ -1416,11 +1409,7 @@ void SignatureExpansion::expandExternalSignatureTypes() {
   }
 
   case SILFunctionTypeRepresentation::CFunctionPointer:
-    if (cxxCtorDecl) {
-      auto clangTy = IGM.getClangASTContext().getPointerType(
-          IGM.getClangType(SILResultTy));
-      paramTys.push_back(clangTy);
-    }
+    // No implicit arguments.
     break;
 
   case SILFunctionTypeRepresentation::Thin:
@@ -1448,7 +1437,6 @@ void SignatureExpansion::expandExternalSignatureTypes() {
 
   // Generate function info for this signature.
   auto extInfo = clang::FunctionType::ExtInfo();
-
   auto &FI = clang::CodeGen::arrangeFreeFunctionCall(IGM.ClangCodeGen->CGM(),
                                              clangResultTy, paramTys, extInfo,
                                              clang::CodeGen::RequiredArgs::All);
@@ -1458,14 +1446,6 @@ void SignatureExpansion::expandExternalSignatureTypes() {
          "Expected one ArgInfo for each parameter type!");
 
   auto &returnInfo = FI.getReturnInfo();
-
-#ifndef NDEBUG
-  bool formalIndirectResult = FnType->getNumResults() > 0 &&
-                              FnType->getSingleResult().isFormalIndirect();
-  assert(
-      (cxxCtorDecl || !formalIndirectResult || returnInfo.isIndirect()) &&
-      "swift and clang disagree on whether the result is returned indirectly");
-#endif
 
   // Does the result need an extension attribute?
   if (returnInfo.isExtend()) {
@@ -1571,8 +1551,6 @@ void SignatureExpansion::expandExternalSignatureTypes() {
 
   // If we return indirectly, that is the first parameter type.
   if (returnInfo.isIndirect()) {
-    auto resultType = getSILFuncConventions().getSingleSILResultType(
-        IGM.getMaximalTypeExpansionContext());
     if (IGM.Triple.isWindowsMSVCEnvironment() &&
         FnType->getRepresentation() ==
             SILFunctionTypeRepresentation::CXXMethod) {
@@ -1580,9 +1558,9 @@ void SignatureExpansion::expandExternalSignatureTypes() {
       // returned indirect values.
       emitArg(0);
       firstParamToLowerNormally = 1;
-      addIndirectResult(resultType);
+      addIndirectResult();
     } else
-      addIndirectResult(resultType);
+      addIndirectResult();
   }
 
   // Use a special IR type for passing block pointers.
@@ -1596,25 +1574,10 @@ void SignatureExpansion::expandExternalSignatureTypes() {
   for (auto i : indices(paramTys).slice(firstParamToLowerNormally))
     emitArg(i);
 
-  if (cxxCtorDecl) {
-    ResultIRType = cast<llvm::Function>(IGM.getAddrOfClangGlobalDecl(
-                                            {cxxCtorDecl, clang::Ctor_Complete},
-                                            (ForDefinition_t) false))
-                       ->getReturnType();
-  } else if (returnInfo.isIndirect() || returnInfo.isIgnore()) {
+  if (returnInfo.isIndirect() || returnInfo.isIgnore()) {
     ResultIRType = IGM.VoidTy;
   } else {
     ResultIRType = returnInfo.getCoerceToType();
-  }
-
-  if (cxxCtorDecl) {
-    llvm::errs() << "### ctor signature:\n";
-    llvm::errs() << "return IR type: ";
-    ResultIRType->dump();
-    llvm::errs() << "param IR type:\n";
-    for (auto t : ParamIRTypes)
-      t->dump();
-    llvm::errs() << "### ctor signature end\n";
   }
 }
 
@@ -2023,7 +1986,7 @@ void SignatureExpansion::expandAsyncEntryType() {
   auto &ti = IGM.getTypeInfo(resultType);
   auto &native = ti.nativeReturnValueSchema(IGM);
   if (native.requiresIndirect())
-    addIndirectResult(resultType);
+    addIndirectResult();
 
   // Add the indirect result types.
   expandIndirectResults();
@@ -2190,11 +2153,10 @@ Signature SignatureExpansion::getSignature() {
 
 Signature Signature::getUncached(IRGenModule &IGM,
                                  CanSILFunctionType formalType,
-                                 FunctionPointerKind fpKind, bool forStaticCall,
-                                 const clang::CXXConstructorDecl *cxxCtorDecl) {
+                                 FunctionPointerKind fpKind,
+                                 bool forStaticCall) {
   GenericContextScope scope(IGM, formalType->getInvocationGenericSignature());
-  SignatureExpansion expansion(IGM, formalType, fpKind, forStaticCall,
-                               cxxCtorDecl);
+  SignatureExpansion expansion(IGM, formalType, fpKind, forStaticCall);
   expansion.expandFunctionType();
   return expansion.getSignature();
 }
@@ -3273,13 +3235,7 @@ llvm::CallBase *IRBuilder::CreateCallOrInvoke(
     for (unsigned argIndex = 0; argIndex < func->arg_size(); ++argIndex) {
       if (func->hasParamAttribute(argIndex, llvm::Attribute::StructRet)) {
         llvm::AttrBuilder builder(func->getContext());
-        // See if there is a sret parameter in the signature. There are cases
-        // where the called function has a sret parameter, but the signature
-        // doesn't (e.g., noreturn functions).
-        llvm::Type *ty = attrs.getParamStructRetType(argIndex);
-        if (!ty)
-          ty = func->getParamStructRetType(argIndex);
-        builder.addStructRetAttr(ty);
+        builder.addStructRetAttr(func->getParamStructRetType(argIndex));
         attrs = attrs.addParamAttributes(func->getContext(), argIndex, builder);
       }
       if (func->hasParamAttribute(argIndex, llvm::Attribute::ByVal)) {
@@ -3994,13 +3950,11 @@ static void externalizeArguments(IRGenFunction &IGF, const Callee &callee,
     params = params.drop_back();
   }
 
-  bool formalIndirectResult = fnType->getNumResults() > 0 &&
-                              fnType->getSingleResult().isFormalIndirect();
-
-  // If clang returns directly and swift returns indirectly, this must be a c++
-  // constructor call. In that case, skip the "self" param.
-  if (!FI.getReturnInfo().isIndirect() && formalIndirectResult)
+  if (fnType->getNumResults() > 0 &&
+             fnType->getSingleResult().isFormalIndirect()) {
+    // Ignore the indirect result parameter.
     firstParam += 1;
+  }
 
   for (unsigned i = firstParam; i != paramEnd; ++i) {
     auto clangParamTy = FI.arg_begin()[i].type;
@@ -4104,16 +4058,6 @@ static void externalizeArguments(IRGenFunction &IGF, const Callee &callee,
       llvm_unreachable("Need to handle InAlloca when externalizing arguments");
       break;
     }
-  }
-
-  if (!FI.getReturnInfo().isIndirect() && formalIndirectResult) {
-    llvm::errs() << "### args:\n";
-    for (auto arg : out.getAll())
-      arg->dump();
-
-    llvm::errs() << "### function begin:\n";
-    IGF.CurFn->dump();
-    llvm::errs() << "### function end\n";
   }
 }
 
