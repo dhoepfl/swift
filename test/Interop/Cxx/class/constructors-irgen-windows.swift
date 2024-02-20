@@ -17,6 +17,14 @@ public func createHasVirtualBase() -> HasVirtualBase {
   return HasVirtualBase(ArgType())
 }
 
+public func createHasVirtualbase() -> HasVirtualBase {
+  // MICROSOFT_X64: define dllexport swiftcc void @"$s7MySwift20createHasVirtualbaseSo0{{bcD0VyF|deF0VyF}}"(ptr noalias sret({{.*}}) %0)
+  // MICROSOFT_X64-NOT: define
+  // Note `this` return type and implicit "most derived" argument.
+  // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr %{{[0-9]+}}, i32 %{{[0-9]+}}, i32 1)
+  return HasVirtualBase(ArgType())
+}
+
 public func createImplicitDefaultConstructor() -> ImplicitDefaultConstructor {
   // MICROSOFT_X64: define dllexport swiftcc i32 @"$s7MySwift32createImplicitDefaultConstructorSo0{{bcD0VyF|deF0VyF}}"()
   // MICROSOFT_X64-NOT: define
