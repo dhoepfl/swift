@@ -13,6 +13,8 @@ public func createHasVirtualBase() -> HasVirtualBase {
   // MICROSOFT_X64-NOT: define
   // Note `this` return type and implicit "most derived" argument.
   // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr %{{[0-9]+}}, i32 %{{[0-9]+}}, i32 1)
+  // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr %{{[0-9]+}}, i32 %{{[0-9]+}}, i32 1)
+  let _ : HasVirtualBase = HasVirtualBase(ArgType())
   return HasVirtualBase(ArgType())
 }
 
