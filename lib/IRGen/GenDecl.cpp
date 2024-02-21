@@ -3466,6 +3466,7 @@ llvm::Constant *swift::irgen::emitCXXConstructorThunkIfNeeded(
     return ctorAddress;
   }
 
+  // Check whether we've created the thunk already.
   if (auto *thunkFn = IGM.Module.getFunction(name))
     return thunkFn;
 
@@ -3552,7 +3553,9 @@ llvm::Function *IRGenModule::getAddrOfSILFunction(
   auto clangDecl = f->getClangDecl();
   auto cxxCtor = dyn_cast_or_null<clang::CXXConstructorDecl>(clangDecl);
 
-  // Check whether we've created the function already.
+  // Check whether we've created the function already. If the function is a C++
+  // constructor, don't return the constructor here as a thunk might be needed
+  // to call the constructor.
   // FIXME: We should integrate this into the LinkEntity cache more cleanly.
   llvm::Function *fn = Module.getFunction(entity.mangleAsString());
   if (fn && !cxxCtor) {
