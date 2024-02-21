@@ -3543,12 +3543,6 @@ llvm::Function *IRGenModule::getAddrOfSILFunction(
   assert(forDefinition || !isDynamicallyReplaceableImplementation);
   assert(!forDefinition || !shouldCallPreviousImplementation);
 
-  bool printFuncInfo = false;
-  if (f->getName().find("HasVirtualBase@@QEAA@UArgTyp") != StringRef::npos) {
-    printFuncInfo = true;
-    llvm::errs() << "### get address of constructor\n";
-  }
-
   LinkEntity entity =
       LinkEntity::forSILFunction(f, shouldCallPreviousImplementation);
 
@@ -3559,13 +3553,8 @@ llvm::Function *IRGenModule::getAddrOfSILFunction(
     if (forDefinition) {
       updateLinkageForDefinition(*this, fn, entity);
     }
-    if (printFuncInfo)
-      llvm::errs() << "### function found in module\n";
     return fn;
   }
-
-  if (printFuncInfo)
-    llvm::errs() << "### function not found in module\n";
 
   // If it's a Clang declaration, ask Clang to generate the IR declaration.
   // This might generate new functions, so we should do it before computing
@@ -3592,18 +3581,6 @@ llvm::Function *IRGenModule::getAddrOfSILFunction(
       llvm::raw_svector_ostream stream(name);
       stream << "__swift_cxx_ctor";
       entity.mangle(stream);
-
-      if (printFuncInfo) {
-        llvm::FunctionType *assumedFnType = signature.getType();
-        auto *clangFunc = cast<llvm::Function>(clangAddr->stripPointerCasts());
-        llvm::FunctionType *ctorFnType =
-            cast<llvm::FunctionType>(clangFunc->getValueType());
-
-        llvm::errs() << "assume fn type: ";
-        assumedFnType->dump();
-        llvm::errs() << "cfor fn type: ";
-        ctorFnType->dump();
-      }
 
       clangAddr = emitCXXConstructorThunkIfNeeded(*this, signature, ctor, name,
                                                   clangAddr);

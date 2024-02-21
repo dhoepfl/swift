@@ -1,6 +1,6 @@
 // Target-specific tests for C++ constructor call code generation.
 
-// RUN: %swift -module-name MySwift -target x86_64-unknown-windows-msvc %target-swift-flags -dump-clang-diagnostics -I %S/Inputs -enable-experimental-cxx-interop  -emit-irgen -disable-llvm-optzns -disable-swift-specific-llvm-optzns %s -parse-stdlib -parse-as-library -disable-legacy-type-info | %FileCheck %s -check-prefix=MICROSOFT_X64 --dump-input=always
+// RUN: %swift -module-name MySwift -target x86_64-unknown-windows-msvc %target-swift-flags -dump-clang-diagnostics -I %S/Inputs -enable-experimental-cxx-interop -emit-ir %s -parse-stdlib -parse-as-library -disable-legacy-type-info | %FileCheck %s -check-prefix=MICROSOFT_X64
 
 // REQUIRES: OS=windows-msvc
 // REQUIRES: CPU=x86_64
@@ -9,15 +9,7 @@ import Constructors
 import TypeClassification
 
 public func createHasVirtualBase() -> HasVirtualBase {
-  // MICROSOFT_X64: define dllexport swiftcc void @"$s7MySwift20createHsVirtualBaseSo0{{bcD0VyF|deF0VyF}}"(ptr noalias sret({{.*}}) %0)
-  // MICROSOFT_X64-NOT: define
-  // Note `this` return type and implicit "most derived" argument.
-  // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr %{{[0-9]+}}, i32 %{{[0-9]+}}, i32 1)
-  return HasVirtualBase(ArgType())
-}
-
-public func createHasVirtualbase() -> HasVirtualBase {
-  // MICROSOFT_X64: define dllexport swiftcc void @"$s7MySwift20createHsVirtualbaseSo0{{bcD0VyF|deF0VyF}}"(ptr noalias sret({{.*}}) %0)
+  // MICROSOFT_X64: define dllexport swiftcc void @"$s7MySwift20createHasVirtualBaseSo0{{bcD0VyF|deF0VyF}}"(ptr noalias sret({{.*}}) %0)
   // MICROSOFT_X64-NOT: define
   // Note `this` return type and implicit "most derived" argument.
   // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr %{{[0-9]+}}, i32 %{{[0-9]+}}, i32 1)
