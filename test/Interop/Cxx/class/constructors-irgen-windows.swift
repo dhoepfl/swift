@@ -8,8 +8,6 @@
 import Constructors
 import TypeClassification
 
-var i: Int
-
 public func createHasVirtualBase() -> HasVirtualBase {
   // MICROSOFT_X64: define dllexport swiftcc void @"$s7MySwift20createHasVirtualBaseSo0{{bcD0VyF|deF0VyF}}"(ptr noalias sret({{.*}}) [[V0:%.*]])
   // MICROSOFT_X64-NOT: define
@@ -17,8 +15,7 @@ public func createHasVirtualBase() -> HasVirtualBase {
   // MICROSOFT_X64: [[V1:%.*]] = alloca %{{.*}}, align 8
   // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr [[V1]], i32 %{{[0-9]+}}, i32 1)
   // MICROSOFT_X64: call ptr @"??0HasVirtualBase@@QEAA@UArgType@@@Z"(ptr [[V0]], i32 %{{[0-9]+}}, i32 1)
-  let t : HasVirtualBase = HasVirtualBase(ArgType())
-  i = t.i
+  let _ : HasVirtualBase = HasVirtualBase(ArgType())
   return HasVirtualBase(ArgType())
 }
 
